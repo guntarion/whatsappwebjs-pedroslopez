@@ -1,20 +1,14 @@
-// Using CommonJS require to load the openai package and dotenv for environment variables
-
-// const openaiPackage = require('openai');
 const dotenv = require('dotenv');
 dotenv.config();
+const OpenAI = require('openai');
+const openai = new OpenAI(process.env.OPENAI_API_KEY);
 
-// const { Configuration, OpenAIApi } = openaiPackage;
-
-
-
-// Configure OpenAI with your API key
-// const configuration = new Configuration({ apiKey: process.env.OPENAI_API_KEY });
-// const openai = new OpenAIApi(configuration);
-
-
+const fetch = require('node-fetch');
+const fs = require('fs');
 
 const { Client, Location, Poll, List, Buttons, LocalAuth } = require('./index');
+
+
 
 const client = new Client({
     authStrategy: new LocalAuth(),
@@ -27,11 +21,6 @@ const client = new Client({
 
 client.initialize();
 
-const OpenAI = require('openai');
-const openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY,
-});
-const fs = require('fs');
 
 
 async function main(content) {
@@ -172,6 +161,66 @@ client.on('message', async (msg) => {
         // Send a new message to the same chat
         client.sendMessage(msg.from, 'pong');
     } 
+
+    else if (msg.body.startsWith('!qayat ')) {
+        const ayah = msg.body.slice(7); // Get the ayah number or surah:ayah from the message
+        const surahNumber = ayah.split(':')[0]; // Get the surah number
+
+        // eslint-disable-next-line quotes
+        const surahNames = ["Al-Fatihah", "Al-Baqarah", "Ali 'Imran", "An-Nisa'", "Al-Ma'idah", "Al-An'am", "Al-A'raf", "Al-Anfal", "At-Taubah", "Yunus", "Hud", "Yusuf", "Ar-Ra'd", "Ibrahim", "Al-Hijr", "An-Nahl", "Al-Isra'", "Al-Kahf", "Maryam", "Ta-Ha", "Al-Anbiya'", "Al-Hajj", "Al-Mu'minun", "An-Nur", "Al-Furqan", "Ash-Shu'ara", "An-Naml", "Al-Qasas", "Al-Ankabut", "Ar-Rum", "Luqman", "As-Sajdah", "Al-Ahzab", "Saba'", "Fatir", "Ya-Sin", "As-Saffat", "Sad", "Az-Zumar", "Ghafir", "Fussilat", "Ash-Shura", "Az-Zukhruf", "Ad-Dukhan", "Al-Jathiyah", "Al-Ahqaf", "Muhammad", "Al-Fath", "Al-Hujurat", "Qaf", "Adh-Dhariyat", "At-Tur", "An-Najm", "Al-Qamar", "Ar-Rahman", "Al-Waqi'ah", "Al-Hadid", "Al-Mujadilah", "Al-Hashr", "Al-Mumtahanah", "As-Saff", "Al-Jumu'ah", "Al-Munafiqun", "At-Taghabun", "At-Talaq", "At-Tahrim", "Al-Mulk", "Al-Qalam", "Al-Haqqah", "Al-Ma'arij", "Nuh", "Al-Jinn", "Al-Muzzammil", "Al-Muddathir", "Al-Qiyamah", "Al-Insan", "Al-Mursalat", "An-Naba'", "An-Nazi'at", "'Abasa", "At-Takwir", "Al-Infitar", "Al-Mutaffifin", "Al-Inshiqaq", "Al-Buruj", "At-Tariq", "Al-A'la", "Al-Ghashiyah", "Al-Fajr", "Al-Balad", "Ash-Shams", "Al-Lail", "Ad-Duha", "Ash-Sharh", "At-Tin", "Al-'Alaq", "Al-Qadr", "Al-Bayyinah", "Az-Zalzalah", "Al-'Adiyat", "Al-Qari'ah", "At-Takathur", "Al-'Asr", "Al-Humazah", "Al-Fil", "Quraysh", "Al-Ma'un", "Al-Kawthar", "Al-Kafirun", "An-Nasr", "Al-Masad", "Al-Ikhlas", "Al-Falaq", "An-Nas"];
+
+        const surahName = surahNames[surahNumber - 1]; // Get the surah name using the surah number as an index
+
+        const url = `http://api.alquran.cloud/v1/ayah/${ayah}/id.indonesian`;
+
+        fetch(url)
+            .then(response => response.json())
+            .then(data => {
+                const content = data.data.text; // Get the content from the API response
+                // Use the content here
+                msg.reply(`Surah ${surahNumber}: ${surahName} ayat ke-${ayah.split(':')[1]}\n${content}`);
+            })
+            .catch(error => console.error('Error:', error));
+    }
+
+    else if (msg.body.startsWith('!qcari ')) {
+        const input = msg.body.slice(7); // Get the user's input, removing "!qcari " from the start
+        let keyword, surah;
+
+        if (input.includes(':')) {
+            [keyword, surah] = input.split(':'); // Split the input at the colon to get the keyword and surah number
+        } else {
+            keyword = input; // If there's no colon, the whole input is the keyword
+            surah = 'all'; // Search all surahs
+        }
+
+        const url = `http://api.alquran.cloud/v1/search/${encodeURIComponent(keyword)}/${encodeURIComponent(surah)}/id.indonesian`;
+
+        fetch(url)
+            .then(response => response.json())
+            .then(data => {
+                if (data.data && data.data.matches && data.data.matches.length > 0) {
+                    // Start building the reply message
+                    let replyMessage = `Terdapat ${data.data.matches.length} Hasil Pencarian untuk kata kunci '${keyword}':\n\n`;
+
+                    // Append each match to the reply message with a sequence number
+                    data.data.matches.forEach((match, index) => {
+                        replyMessage += `${index + 1}. Surah ${match.surah.number} ayat ${match.numberInSurah}\n`;
+                    });
+
+                    // Send the formatted reply
+                    msg.reply(replyMessage);
+                } else {
+                    // No matches found
+                    msg.reply(`Tidak ada hasil pencarian ditemukan untuk kata kunci '${keyword}'.`);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                msg.reply('Maaf, terjadi kesalahan saat memproses permintaan Anda.');
+            });
+    }
+
     
     else if (msg.body.startsWith('!ai ')) {
         // Extract the prompt from the message, removing "!ai " from the start
@@ -180,16 +229,16 @@ client.on('message', async (msg) => {
         // Define an async function to call the OpenAI API
         const callOpenAI = async () => {
             try {
-                const response = await openai.createCompletion({
-                    model: 'gpt-3.5-turbo-instruct',
-                    prompt: prompt,
-                    temperature: 0.6,
-                    max_tokens: 256,
+                const response = await openai.chat.completions.create({
+                    model: 'gpt-3.5-turbo',
+                    messages: [
+                        { role: 'system', content: 'You are a helpful assistant.' },
+                        { role: 'user', content: prompt }
+                    ],
                 });
 
-                // console.log('Response Text:', response.data.choices[0].text);
                 // Send the response text back to the user
-                msg.reply(response.data.choices[0].text.trim());
+                msg.reply(response.choices[0].message.content.trim());
             } catch (error) {
                 console.error('OpenAI Error:', error);
                 msg.reply('Sorry, I encountered an error while processing your request.');
@@ -200,6 +249,8 @@ client.on('message', async (msg) => {
         callOpenAI();
     }
 
+
+
     else if (msg.body.startsWith('!umroh ')) {
         // Extract the question from the message, removing "!umroh " from the start
         const content = msg.body.slice(7);
@@ -208,60 +259,6 @@ client.on('message', async (msg) => {
     }
 
 
-
-    /*
-    else if (msg.body.startsWith('!ask ')) {
-        const question = msg.body.slice(5); // Extract the question from the message
-
-        try {
-            // Step 1: Upload a File with an "assistants" purpose
-            const myFile = await openai.files.create({
-                file: fs.createReadStream('./info_almuhajirin.txt'),
-                purpose: 'assistants',
-            });
-
-            // Step 2: Create an Assistant
-            const myAssistant = await openai.assistants.create({
-                model: 'gpt-4-1106-preview', // Ensure the model is correct and available for use
-                instructions: 'Anda adalah customer support chatbot...',
-                name: 'Customer Support Al Muhajirin',
-                tools: [{ type: 'retrieval' }],
-            });
-
-            // Step 3: Create a Thread
-            const myThread = await openai.threads.create();
-
-            // Step 4: Add a Message to a Thread
-            const myThreadMessage = await openai.threads.messages.create(myThread.id, {
-                role: 'user',
-                content: question,
-                file_ids: [myFile.id],
-            });
-
-            // Step 5 & 6: Run the Assistant and Retrieve the Run
-            // Simplify this part according to your app's logic and response time considerations
-
-            // For simplicity, directly attempt to get the answer (you may need to adjust logic for async/wait)
-            const myRun = await openai.threads.runs.create(myThread.id, {
-                assistant_id: myAssistant.id,
-                instructions: 'Bersikaplah sebagai seorang muslim...',
-            });
-
-            // Assuming direct response for simplicity
-            // Note: Real-world usage might require polling or webhook for run completion
-            if (myRun.status === 'completed') {
-                const allMessages = await openai.threads.messages.list(myThread.id);
-                // Send back the first assistant message as response
-                msg.reply(allMessages.data[0].content);
-            } else {
-                msg.reply('Sorry, Im still thinking...');
-            }
-        } catch (error) {
-            console.error('Error:', error);
-            msg.reply('Sorry, there was an issue processing your request.');
-        }
-    }
-    */
     
     else if (msg.body.startsWith('!sendto ')) {
         // Direct send a new message to specific id
