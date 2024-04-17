@@ -1,13 +1,18 @@
 // Using CommonJS require to load the openai package and dotenv for environment variables
-const openaiPackage = require('openai');
+
+// const openaiPackage = require('openai');
 const dotenv = require('dotenv');
 dotenv.config();
 
-const { Configuration, OpenAIApi } = openaiPackage;
+// const { Configuration, OpenAIApi } = openaiPackage;
+
+
 
 // Configure OpenAI with your API key
-const configuration = new Configuration({ apiKey: process.env.OPENAI_API_KEY });
-const openai = new OpenAIApi(configuration);
+// const configuration = new Configuration({ apiKey: process.env.OPENAI_API_KEY });
+// const openai = new OpenAIApi(configuration);
+
+
 
 const { Client, Location, Poll, List, Buttons, LocalAuth } = require('./index');
 
@@ -21,6 +26,99 @@ const client = new Client({
 });
 
 client.initialize();
+
+const OpenAI = require('openai');
+const openai = new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY,
+});
+const fs = require('fs');
+
+
+async function main(content) {
+    // Step 1: Upload a File with an "assistants" purpose
+    const myFile = await openai.files.create({
+        file: fs.createReadStream('info_almuhajirin.txt'),
+        purpose: 'assistants',
+    });
+    console.log('This is the file object: ', myFile, '\n');
+
+    // Step 2: Create an Assistant
+    const myAssistant = await openai.beta.assistants.create({
+        model: 'gpt-4-1106-preview',
+        instructions: 'Anda adalah customer support chatbot. Gunakan knowledge base yang disediakan untuk merespon pertanyaan customer dengan sebaik mungkin. Langsung jawab pertanyaannya tanpa menyebut semacam "Berdasarkan informasi yang terdapat dalam dokumen yang Anda unggah". Jika Anda tidak menemukan jawabannya, katakan "Maaf, saya tidak menemukan jawabannya".',
+        name: 'Customer Support Al Muhajirin',
+        tools: [{ type: 'retrieval' }],
+    });
+    console.log('This is the assistant object: ', myAssistant, '\n');
+
+    // Assuming `myThread` contains a valid thread object with an `id` property
+    const myThread = await openai.beta.threads.create();
+    console.log('This is the thread object: ', myThread, '\n');
+
+    // Step 4: Add a Message to a Thread
+    const myThreadMessage = await openai.beta.threads.messages.create({
+        thread_id: myThread.id,
+        messages: [{
+            role: 'user',
+            content: content,
+            file_ids: [myFile.id],
+        }]
+    });
+    console.log('This is the message object: ', myThreadMessage, '\n');
+
+    // const myThreadMessage = await openai.beta.threads.messages.create(
+    //     (thread_id = myThread.id),
+    //     messages: [{
+    //         role: 'user',
+    //         content: content,
+    //         file_ids: [myFile.id],
+    //     }]
+    // });
+
+    // Step 5: Run the Assistant
+    const myRun = await openai.beta.threads.runs.create(
+        { thread_id: myThread.id },
+        {
+            assistant_id: myAssistant.id,
+            instructions: 'Bersikaplah sebagai seorang muslim yang berwawasan kaya tentang keislaman.',
+        }
+    );
+
+    // Step 6: Periodically retrieve the Run to check on its status to see if it has moved to completed
+    const retrieveRun = async () => {
+        let keepRetrievingRun;
+
+        while (myRun.status === 'queued' || myRun.status === 'in_progress') {
+            keepRetrievingRun = await openai.beta.threads.runs.retrieve(
+                { thread_id: myThread.id },
+                { run_id : myRun.id }
+            );
+
+            if (keepRetrievingRun.status === 'completed') {
+                // Step 7: Retrieve the Messages added by the Assistant to the Thread
+                const allMessages = await openai.beta.threads.messages.list(
+                    { thread_id : myThread.id }
+                );
+
+                console.log('User: ', myThreadMessage.content[0].text.value);
+                console.log('Assistant: ', allMessages.data[0].content[0].text.value);
+
+                break;
+            } else if (
+                keepRetrievingRun.status === 'queued' ||
+                keepRetrievingRun.status === 'in_progress'
+            ) {
+                // pass
+            } else {
+                console.log(`Run status: ${keepRetrievingRun.status}`);
+                break;
+            }
+        }
+    };
+    retrieveRun();
+}
+
+
 
 client.on('loading_screen', (percent, message) => {
     console.log('LOADING SCREEN', percent, message);
@@ -101,6 +199,69 @@ client.on('message', async (msg) => {
         // Call the OpenAI function
         callOpenAI();
     }
+
+    else if (msg.body.startsWith('!umroh ')) {
+        // Extract the question from the message, removing "!umroh " from the start
+        const content = msg.body.slice(7);
+
+        main(content);
+    }
+
+
+
+    /*
+    else if (msg.body.startsWith('!ask ')) {
+        const question = msg.body.slice(5); // Extract the question from the message
+
+        try {
+            // Step 1: Upload a File with an "assistants" purpose
+            const myFile = await openai.files.create({
+                file: fs.createReadStream('./info_almuhajirin.txt'),
+                purpose: 'assistants',
+            });
+
+            // Step 2: Create an Assistant
+            const myAssistant = await openai.assistants.create({
+                model: 'gpt-4-1106-preview', // Ensure the model is correct and available for use
+                instructions: 'Anda adalah customer support chatbot...',
+                name: 'Customer Support Al Muhajirin',
+                tools: [{ type: 'retrieval' }],
+            });
+
+            // Step 3: Create a Thread
+            const myThread = await openai.threads.create();
+
+            // Step 4: Add a Message to a Thread
+            const myThreadMessage = await openai.threads.messages.create(myThread.id, {
+                role: 'user',
+                content: question,
+                file_ids: [myFile.id],
+            });
+
+            // Step 5 & 6: Run the Assistant and Retrieve the Run
+            // Simplify this part according to your app's logic and response time considerations
+
+            // For simplicity, directly attempt to get the answer (you may need to adjust logic for async/wait)
+            const myRun = await openai.threads.runs.create(myThread.id, {
+                assistant_id: myAssistant.id,
+                instructions: 'Bersikaplah sebagai seorang muslim...',
+            });
+
+            // Assuming direct response for simplicity
+            // Note: Real-world usage might require polling or webhook for run completion
+            if (myRun.status === 'completed') {
+                const allMessages = await openai.threads.messages.list(myThread.id);
+                // Send back the first assistant message as response
+                msg.reply(allMessages.data[0].content);
+            } else {
+                msg.reply('Sorry, Im still thinking...');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            msg.reply('Sorry, there was an issue processing your request.');
+        }
+    }
+    */
     
     else if (msg.body.startsWith('!sendto ')) {
         // Direct send a new message to specific id

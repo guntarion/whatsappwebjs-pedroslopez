@@ -1,5 +1,7 @@
 [![npm](https://img.shields.io/npm/v/whatsapp-web.js.svg)](https://www.npmjs.com/package/whatsapp-web.js) [![Depfu](https://badges.depfu.com/badges/4a65a0de96ece65fdf39e294e0c8dcba/overview.svg)](https://depfu.com/github/pedroslopez/whatsapp-web.js?project_id=9765) ![WhatsApp_Web 2.2346.52](https://img.shields.io/badge/WhatsApp_Web-2.2346.52-brightgreen.svg) [![Discord Chat](https://img.shields.io/discord/698610475432411196.svg?logo=discord)](https://discord.gg/H7DqQs4)  
 
+https://github.com/pedroslopez/whatsapp-web.js
+
 # whatsapp-web.js
 A WhatsApp API client that connects through the WhatsApp Web browser app
 
@@ -144,3 +146,11 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
+
+
+OPEN AI Barebone Setup
+https://medium.com/@bobmain49/openai-api-bare-bones-node-js-setup-b0a533d1970e
+
+
+Jadwal Sholat
+https://github.com/lakuapik/jadwalsholatorg/tree/master?tab=readme-ov-file
