@@ -108,7 +108,7 @@ class Client extends EventEmitter {
             // navigator.webdriver fix
             browserArgs.push('--disable-blink-features=AutomationControlled');
 
-            browser = await puppeteer.launch({...puppeteerOpts, args: browserArgs});
+            browser = await puppeteer.launch({...puppeteerOpts, executablePath: '/opt/homebrew/bin/chromium', args: browserArgs});
             page = (await browser.pages())[0];
         }
 
