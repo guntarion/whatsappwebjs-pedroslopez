@@ -40,22 +40,82 @@ client.on('ready', () => {
     console.log('🧤 READY');
 });
 
+// SIMULATING TYPING AND DELAYED REPLIES
+
+async function replyWithDelay(msg, replyText) {
+    const chat = await msg.getChat();
+    // Simulate typing in the chat
+    chat.sendStateTyping(); 
+
+    // Wait for a random time between 2 and 4 seconds
+    const delay = Math.random() * 2000 + 2000;
+    setTimeout(() => {
+        msg.reply(replyText);
+    }, delay);
+}
+
+async function sendMessageWithDelay(msg, messageText) {
+    const chat = await msg.getChat();
+    // Simulate typing in the chat
+    chat.sendStateTyping(); 
+
+    // Wait for a random time between 2 and 4 seconds
+    const delay = Math.random() * 2000 + 2000;
+    setTimeout(() => {
+        client.sendMessage(msg.from, messageText);
+    }, delay);
+}
+
+
+
+
+// BEGIN PUPPETEER EVENTS
 
 client.on('message', async (msg) => {
     console.log('MESSAGE RECEIVED', msg);
 
-    if (msg.body === '!ping reply') {
+    if (msg.body === '!status') {
+        const currentDate = new Date();
+        const masehiDateTime = currentDate.toLocaleString('en-US', { timeZone: 'Asia/Jakarta' });
+        const hijriDateTime = currentDate.toLocaleString('en-US', { timeZone: 'Asia/Jakarta', calendar: 'islamic-umalqura' });
+
+        const replyMessage = `Server is up and running 🚀\nMasehi: ${masehiDateTime}\nHijriah: ${hijriDateTime}`;
+        await replyWithDelay(msg, replyMessage);
+    } else if (msg.body === '!ping reply') {
         // Send a new message as a reply to the current one
-        msg.reply('pong');
+        // msg.reply('pong');
+        await replyWithDelay(msg, 'pong');
     } else if (msg.body === '!ping') {
         // Send a new message to the same chat
-        client.sendMessage(msg.from, 'pong');
+        // client.sendMessage(msg.from, 'pong');
+        await sendMessageWithDelay(msg, 'pong');
     }
 
     else if (msg.body.startsWith('!askpdf')) {
         console.log('Received a question to ask the PDF.');
         const input = msg.body.slice(8);    // Get the input from the message, removing "!askpdf " from the start
         console.log('Input:', input);
+
+        const url = 'http://localhost:3001/ask';
+
+        // Send the question to the local endpoint
+        fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                question: input,
+            }),
+        })
+            .then(response => response.json())
+            .then(data => {
+                // Reply with the answer
+                msg.reply(data.result.text);
+            })
+            .catch(error => {
+                console.error('Error:', error);
+            });
     }
 
         
