@@ -19,6 +19,8 @@ const client = new Client({
 
 const nasehatList = require('./models/nasehatData');
 const haditsData = require('./models/haditsMuslimData');
+const kiatSehatList = require('./models/kiatSehatData');
+
 
 client.initialize();
 
@@ -91,7 +93,7 @@ client.on('message', async (msg) => {
     console.log('MESSAGE RECEIVED', msg);
     const chat = await msg.getChat();
 
-    if (msg.body === '!status') {
+    if (msg.body === '.status') {
         const currentDate = new Date();
         const masehiDateTime = currentDate.toLocaleString('en-US', {
             timeZone: 'Asia/Jakarta',
@@ -113,33 +115,88 @@ client.on('message', async (msg) => {
         // client.sendMessage(msg.from, 'pong');
         await sendMessageWithDelay(chat, msg, 'pong');
     } 
+
+    else if (msg.body === '.info') {
+        const replyMessage = `
+    📳 WhatsApp Center
+    🌟 Al Muhajirin Rewwin
+    🔖 0823-1213-2187
+
+    \`.info\`
+    Menampilkan informasi ini.
+
+    \`.nasehat\`
+    Menampilkan inspirasi nasehat dari ayat Al Qur'an.
+
+    \`.sehat\`
+    Menampilkan kiat sehat islami.
+
+    \`.sholat\`
+    Menampilkan jadwal waktu sholat khusus untuk wilayah Sidoarjo di hari ini.
+
+    \`.hadits (angka)\`
+    Menampilkan hadits shahih Muslim sesuai nomor yang diminta (1 - 4.930). Contoh: \`.hadits 123\` untuk hadits nomer 123. Bila angka tidak diisi macam \`.hadits\`, maka  akan ditampilkan hadits nomer sembarang.
+
+    \`.ayat (no-surat):(no-ayat)\`
+    Menampilkan terjemah dari ayat Al Qur'an. Contoh: \`.ayat 2:30\` untuk ayat dari surah ke-2 ayat ke-30. 
+
+    \`.cari (istilah-yang-dicari):(nomer-surat)\`
+    Menampilkan daftar ayat yang berisikan istilah yang dicari: Contoh: \`.cari ibrahim:2\` untuk mencari ayat di surah ke-2 yang mengandung kata "ibrahim". Bisa juga \`.cari ibrahim\` untuk menampilkan semua ayat dari surat manapun yang mengandung kata bersangkutan
+
+    \`.ai (pertanyaan bebas)\`
+    Mengajukan pertanyaan bebas pada Artificial Intelligence. Contoh: \`.ai apa syarat sah wudhu?\`
+
+    \`.saran (saran dan masukan)\`
+    Mengirimkan saran atau pertanyaan kepada admin. Harap dimaklumi bila tanggapan tidak segera diberikan.
     
-    else if (msg.body === 'nasehat') {
+    \`.status\`
+    Cek apakah server online
+        `;
+        await replyWithDelay(chat, msg, replyMessage);
+    }
+    
+    else if (msg.body === '.nasehat') {
         const randomNasehat = nasehatList[Math.floor(Math.random() * nasehatList.length)];
         const replyMessage = `🎖 _${randomNasehat.advice}_ \n\n📍Inspirasi dari Surat ☪️ ${randomNasehat.reference}\n\n~ Al Muhajirin WA Center`;
         
         await replyWithDelay(chat, msg, replyMessage);
     } 
+
+    else if (msg.body === '.sehat') {
+        const randomKiatSehat = kiatSehatList[Math.floor(Math.random() * kiatSehatList.length)];
+        const replyMessage = `💝 Kiat Sehat: *${randomKiatSehat.kiat}*\n\n${randomKiatSehat.deskripsi}\n\n~ Al Muhajirin WA Center`;
+
+        await replyWithDelay(chat, msg, replyMessage);
+    }
     
-    else if (msg.body.startsWith('hadits')) {
+    else if (msg.body.startsWith('.hadits')) {
         // Extract the number part from the message
         const parts = msg.body.split(' '); // This splits the message into parts based on spaces
+        let hadith;
         if (parts.length === 2 && !isNaN(parts[1])) {
-            const hadithNumber = parseInt(parts[1], 10);
-            // Find the hadith by number
-            const hadith = haditsData.find(h => h.number === hadithNumber);
-            if (hadith) {
-                const replyMessage = `🖌️ Hadits Muslim no: ${hadithNumber}:\n ${hadith.id} \n\n~ Al Muhajirin WA Center`; 
-                await replyWithDelay(chat, msg, replyMessage);
-            } else {
-                await replyWithDelay(chat, msg, 'Hadits tidak ditemukan.');
+            let hadithNumber = parseInt(parts[1], 10);
+            // Ensure the hadith number is within the valid range
+            if (hadithNumber < 1) {
+                hadithNumber = 1;
+            } else if (hadithNumber > 4930) {
+                hadithNumber = 4930;
             }
+            // Find the hadith by number
+            hadith = haditsData.find(h => h.number === hadithNumber);
+        } else if (parts.length === 1) {
+            // Select a random hadith
+            hadith = haditsData[Math.floor(Math.random() * haditsData.length)];
+        }
+
+        if (hadith) {
+            const replyMessage = `🖌️ Hadits Muslim no: ${hadith.number}:\n ${hadith.id} \n\n~ Al Muhajirin WA Center`; 
+            await replyWithDelay(chat, msg, replyMessage);
         } else {
-            await replyWithDelay(chat, msg, 'Format pesan salah. Gunakan \'hadits [nomor]\'.');
+            await replyWithDelay(chat, msg, 'Hadits tidak ditemukan.');
         }
     }
 
-    else if (msg.body === 'waktu') {
+    else if (msg.body === '.sholat') {
         fetch('https://muslimsalat.com/sidoarjo.json')
             .then(response => response.json())
             .then(data => {
@@ -195,8 +252,10 @@ client.on('message', async (msg) => {
             .catch((error) => {
                 console.error('Error:', error);
             });
-    } else if (msg.body.startsWith('ayat ')) {
-        let inputanAsli = msg.body.slice(5); // Get the ayah number or surah:ayah from the message
+    } 
+    
+    else if (msg.body.startsWith('.ayat ')) {
+        let inputanAsli = msg.body.slice(6); // Get the ayah number or surah:ayah from the message
         let surahNumber = inputanAsli.split(':')[0]; // Get the surah number
         surahNumber = parseInt(surahNumber, 10); // Convert the surah number to an integer
         let ayahNumber = inputanAsli.split(':')[0]; // Get the surah number
@@ -227,8 +286,8 @@ client.on('message', async (msg) => {
             })
             .catch((error) => console.error('Error:', error));
 
-    } else if (msg.body.startsWith('cari ')) {
-        const input = msg.body.slice(5); // Get the user's input, removing "!qcari " from the start
+    } else if (msg.body.startsWith('.cari ')) {
+        const input = msg.body.slice(6); // Get the user's input, removing "!qcari " from the start
         let keyword, surah;
 
         if (input.includes(':')) {
@@ -275,7 +334,7 @@ client.on('message', async (msg) => {
                     'Maaf, terjadi kesalahan saat memproses permintaan Anda.'
                 );
             });
-    } else if (msg.body.startsWith('!ai ')) {
+    } else if (msg.body.startsWith('.ai ')) {
         // Extract the prompt from the message, removing "!ai " from the start
         const prompt = msg.body.slice(4);
 
@@ -308,7 +367,7 @@ client.on('message', async (msg) => {
     } else if (msg.body === '!chats') {
         const chats = await client.getChats();
         client.sendMessage(msg.from, `The bot has ${chats.length} chats open.`);
-    } else if (msg.body === '!info') {
+    } else if (msg.body === '.sender') {
         let info = client.info;
         const sender = await msg.getContact();
         // const contactId = sender.id;
