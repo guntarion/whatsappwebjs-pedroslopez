@@ -1,0 +1,6 @@
+{
+    "editor.autoClosingQuotes": "always",
+    "editor.autoClosingBrackets": "always",
+    "javascript.preferences.quoteStyle": "single",
+    "typescript.preferences.quoteStyle": "single"
+}
