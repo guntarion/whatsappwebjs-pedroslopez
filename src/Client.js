@@ -15,6 +15,8 @@ const { ClientInfo, Message, MessageMedia, Contact, Location, Poll, GroupNotific
 const LegacySessionAuth = require('./authStrategies/LegacySessionAuth');
 const NoAuth = require('./authStrategies/NoAuth');
 
+require('dotenv').config();
+
 /**
  * Starting point for interacting with the WhatsApp Web API
  * @extends {EventEmitter}
@@ -141,7 +143,9 @@ class Client extends EventEmitter {
                     '--single-process',  // Necessary on some systems
                     '--disable-gpu'      // Helps in headless environments without a GPU
                 ],
-                executablePath: '/opt/homebrew/bin/chromium'  // Ensure this path is correct for your server's OS
+                // executablePath: '/opt/homebrew/bin/chromium'  // Mac
+                // executablePath: '/snap/bin/chromium'  // Digital Ocean
+                executablePath: process.env.CHROMIUM_PATH
             };
 
             // Launch a new browser instance

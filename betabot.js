@@ -6,6 +6,7 @@ const openai = new OpenAI(process.env.OPENAI_API_KEY);
 const fetch = require('node-fetch');
 
 const { Client, LocalAuth } = require('./index');
+const qrcode = require('qrcode-terminal');
 
 const client = new Client({
     authStrategy: new LocalAuth(),
@@ -27,6 +28,7 @@ client.on('loading_screen', (percent, message) => {
 
 client.on('qr', (qr) => {
     // NOTE: This event will not be fired if a session is specified.
+    qrcode.generate(qr, { small: true });
     console.log('QR RECEIVED', qr);
 });
 
