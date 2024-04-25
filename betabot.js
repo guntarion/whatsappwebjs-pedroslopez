@@ -17,6 +17,7 @@ const client = new Client({
 });
 
 const nasehatList = require('./models/nasehatData');
+const haditsData = require('./models/haditsMuslimData');
 
 client.initialize();
 
@@ -66,10 +67,27 @@ async function sendMessageWithDelay(chat, msg, messageText) {
     }, delay);
 }
 
+function convertTo24Hour(time) {
+    const [hours, minutes] = time.split(':');
+    const hoursIn24 = hours % 12 + (time.includes('pm') ? 12 : 0);
+    return `${hoursIn24}:${minutes.replace('am', 'wib').replace('pm', 'wib')}`;
+}
+
+function adjustTime(time, minutesToAdd) {
+    const [hours, minutes] = time.split(':');
+    const date = new Date();
+    date.setHours(hours);
+    date.setMinutes(parseInt(minutes.replace('wib', '')) + minutesToAdd);
+    const formattedMinutes =
+        date.getMinutes() < 10 ? '0' + date.getMinutes() : date.getMinutes();
+    return `${date.getHours()}:${formattedMinutes} wib`;
+}
+
 // BEGIN PUPPETEER EVENTS
 
 client.on('message', async (msg) => {
     console.log('MESSAGE RECEIVED', msg);
+    const chat = await msg.getChat();
 
     if (msg.body === '!status') {
         const currentDate = new Date();
@@ -82,25 +100,75 @@ client.on('message', async (msg) => {
         });
 
         const replyMessage = `Server Al Muhajirin is up and running 🚀\nMasehi: ${masehiDateTime}\nHijriah: ${hijriDateTime}`;
-        await replyWithDelay(msg, replyMessage);
+        await replyWithDelay(chat, msg, replyMessage);
     } else if (msg.body === '!ping reply') {
+        
         // Send a new message as a reply to the current one
         // msg.reply('pong');
-        await replyWithDelay(msg, 'pong');
+        await replyWithDelay(chat, msg, 'pong');
     } else if (msg.body === '!ping') {
-        const chat = await msg.getChat();
         // Send a new message to the same chat
         // client.sendMessage(msg.from, 'pong');
         await sendMessageWithDelay(chat, msg, 'pong');
-    } else if (msg.body === 'nasehat') {
+    } 
+    
+    else if (msg.body === 'nasehat') {
         const randomNasehat = nasehatList[Math.floor(Math.random() * nasehatList.length)];
         const replyMessage = `🎖 _${randomNasehat.advice}_ \n\n📍Inspirasi dari Surat ☪️ ${randomNasehat.reference}\n\n~ Al Muhajirin WA Center`;
         
-        const chat = await msg.getChat();
         await replyWithDelay(chat, msg, replyMessage);
-        // msg.reply(replyMessage);
-        // await replyWithDelay(client, msg, replyMessage);
-    } else if (msg.body.startsWith('!askpdf')) {
+    } 
+    
+    else if (msg.body.startsWith('hadits')) {
+        // Extract the number part from the message
+        const parts = msg.body.split(' '); // This splits the message into parts based on spaces
+        if (parts.length === 2 && !isNaN(parts[1])) {
+            const hadithNumber = parseInt(parts[1], 10);
+            // Find the hadith by number
+            const hadith = haditsData.find(h => h.number === hadithNumber);
+            if (hadith) {
+                const replyMessage = `🖌️ Hadits Muslim no: ${hadithNumber}:\n ${hadith.id} \n\n~ Al Muhajirin WA Center`; 
+                await replyWithDelay(chat, msg, replyMessage);
+            } else {
+                await replyWithDelay(chat, msg, 'Hadits tidak ditemukan.');
+            }
+        } else {
+            await replyWithDelay(chat, msg, 'Format pesan salah. Gunakan \'hadits [nomor]\'.');
+        }
+    }
+
+    else if (msg.body === 'waktu') {
+        fetch('https://muslimsalat.com/sidoarjo.json')
+            .then(response => response.json())
+            .then(data => {
+                const prayerTimes = data.items[0];
+                const date = data.items[0].date_for;
+                const city = data.city;
+
+                // Convert prayer times to 24 hour format and adjust the time
+                const fajr = adjustTime(convertTo24Hour(prayerTimes.fajr), 3);
+                const shurooq = adjustTime(convertTo24Hour(prayerTimes.shurooq), 3);
+                const dhuhr = adjustTime(convertTo24Hour(prayerTimes.dhuhr), 4);
+                const asr = adjustTime(convertTo24Hour(prayerTimes.asr), 2);
+                const maghrib = adjustTime(convertTo24Hour(prayerTimes.maghrib), 1);
+                const isha = adjustTime(convertTo24Hour(prayerTimes.isha), 3);
+
+
+                const currentDate = new Date();
+                const hijriDate = currentDate.toLocaleString('en-US', {
+                    timeZone: 'Asia/Jakarta',
+                    calendar: 'islamic-umalqura',
+                });
+
+                const message = `*⏰ Waktu Sholat ${city}, ${date}*\n*Hijri: ${hijriDate}*\n\n- Shubuh: ${fajr}\n- Shuruq: ${shurooq}\n- Dhuhur: ${dhuhr}\n- Ashar: ${asr}\n- Maghrib: ${maghrib}\n- Isya': ${isha}\n\n~ Al Muhajirin WA Center`;
+
+                msg.reply(message);
+            })
+            .catch(error => console.error('Error:', error));
+    }
+    
+    
+    else if (msg.body.startsWith('!askpdf')) {
         console.log('Received a question to ask the PDF.');
         const input = msg.body.slice(8); // Get the input from the message, removing "!askpdf " from the start
         console.log('Input:', input);
@@ -125,16 +193,26 @@ client.on('message', async (msg) => {
             .catch((error) => {
                 console.error('Error:', error);
             });
-    } else if (msg.body.startsWith('!qayat ')) {
-        const ayah = msg.body.slice(7); // Get the ayah number or surah:ayah from the message
-        const surahNumber = ayah.split(':')[0]; // Get the surah number
+    } else if (msg.body.startsWith('ayat ')) {
+        let inputanAsli = msg.body.slice(5); // Get the ayah number or surah:ayah from the message
+        let surahNumber = inputanAsli.split(':')[0]; // Get the surah number
+        surahNumber = parseInt(surahNumber, 10); // Convert the surah number to an integer
+        let ayahNumber = inputanAsli.split(':')[0]; // Get the surah number
+        ayahNumber = parseInt(ayahNumber, 10); // Convert the surah number to an integer
+
+        if (surahNumber > 114) {
+            surahNumber = 114;
+            return;
+        }
+
+        let inputanAPI = `${surahNumber}:${ayahNumber}`;
 
         // eslint-disable-next-line quotes
         const surahNames = ['Al-Fatihah', 'Al-Baqarah', 'Ali \'Imran', 'An-Nisa\'', 'Al-Ma\'idah', 'Al-An\'am', 'Al-A\'raf', 'Al-Anfal', 'At-Taubah', 'Yunus', 'Hud', 'Yusuf', 'Ar-Ra\'d', 'Ibrahim', 'Al-Hijr', 'An-Nahl', 'Al-Isra\'', 'Al-Kahf', 'Maryam', 'Ta-Ha', 'Al-Anbiya\'', 'Al-Hajj', 'Al-Mu\'minun', 'An-Nur', 'Al-Furqan', 'Ash-Shu\'ara', 'An-Naml', 'Al-Qasas', 'Al-Ankabut', 'Ar-Rum', 'Luqman', 'As-Sajdah', 'Al-Ahzab', 'Saba\'', 'Fatir', 'Ya-Sin', 'As-Saffat', 'Sad', 'Az-Zumar', 'Ghafir', 'Fussilat', 'Ash-Shura', 'Az-Zukhruf', 'Ad-Dukhan', 'Al-Jathiyah', 'Al-Ahqaf', 'Muhammad', 'Al-Fath', 'Al-Hujurat', 'Qaf', 'Adh-Dhariyat', 'At-Tur', 'An-Najm', 'Al-Qamar', 'Ar-Rahman', 'Al-Waqi\'ah', 'Al-Hadid', 'Al-Mujadilah', 'Al-Hashr', 'Al-Mumtahanah', 'As-Saff', 'Al-Jumu\'ah', 'Al-Munafiqun', 'At-Taghabun', 'At-Talaq', 'At-Tahrim', 'Al-Mulk', 'Al-Qalam', 'Al-Haqqah', 'Al-Ma\'arij', 'Nuh', 'Al-Jinn', 'Al-Muzzammil', 'Al-Muddathir', 'Al-Qiyamah', 'Al-Insan', 'Al-Mursalat', 'An-Naba\'', 'An-Nazi\'at', '\'Abasa', 'At-Takwir', 'Al-Infitar', 'Al-Mutaffifin', 'Al-Inshiqaq', 'Al-Buruj', 'At-Tariq', 'Al-A\'la', 'Al-Ghashiyah', 'Al-Fajr', 'Al-Balad', 'Ash-Shams', 'Al-Lail', 'Ad-Duha', 'Ash-Sharh', 'At-Tin', 'Al-\'Alaq', 'Al-Qadr', 'Al-Bayyinah', 'Az-Zalzalah', 'Al-\'Adiyat', 'Al-Qari\'ah', 'At-Takathur', 'Al-\'Asr', 'Al-Humazah', 'Al-Fil', 'Quraysh', 'Al-Ma\'un', 'Al-Kawthar', 'Al-Kafirun', 'An-Nasr', 'Al-Masad', 'Al-Ikhlas', 'Al-Falaq', 'An-Nas' ];
 
         const surahName = surahNames[surahNumber - 1]; // Get the surah name using the surah number as an index
 
-        const url = `http://api.alquran.cloud/v1/ayah/${ayah}/id.indonesian`;
+        const url = `http://api.alquran.cloud/v1/ayah/${inputanAPI}/id.indonesian`;
 
         fetch(url)
             .then((response) => response.json())
@@ -142,14 +220,13 @@ client.on('message', async (msg) => {
                 const content = data.data.text; // Get the content from the API response
                 // Use the content here
                 msg.reply(
-                    `Surah ${surahNumber}: ${surahName} ayat ke-${
-                        ayah.split(':')[1]
-                    }\n${content}`
+                    `Surah ${surahNumber}: ${surahName} ayat ke-${ayahNumber}\n${content}`
                 );
             })
             .catch((error) => console.error('Error:', error));
-    } else if (msg.body.startsWith('!qcari ')) {
-        const input = msg.body.slice(7); // Get the user's input, removing "!qcari " from the start
+
+    } else if (msg.body.startsWith('cari ')) {
+        const input = msg.body.slice(5); // Get the user's input, removing "!qcari " from the start
         let keyword, surah;
 
         if (input.includes(':')) {
