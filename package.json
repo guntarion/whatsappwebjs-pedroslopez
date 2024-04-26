@@ -37,7 +37,7 @@
     "googleapis": "^135.0.0",
     "mime": "^3.0.0",
     "node-fetch": "^2.7.0",
-    "node-webpmux": "3.1.7",
+    "node-webpmux": "3.2.0",
     "openai": "^4.35.0",
     "puppeteer": "^22.6.5",
     "qrcode-terminal": "^0.12.0",
