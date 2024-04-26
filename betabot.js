@@ -5,6 +5,14 @@ const openai = new OpenAI(process.env.OPENAI_API_KEY);
 
 const fetch = require('node-fetch');
 
+const { google } = require('googleapis');
+
+const auth = new google.auth.GoogleAuth({
+    keyFile: 'hardy-position-391701-f77f2a757d7d.json',
+    scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+});
+
+
 const { Client, LocalAuth } = require('./index');
 const qrcode = require('qrcode-terminal');
 
@@ -71,6 +79,37 @@ async function sendMessageWithDelay(chat, msg, messageText) {
     }, delay);
 }
 
+async function appendToSheet(auth, range, data) {
+    const spreadsheetId = '1cyJRLS-Op7chCV1sY-jZuu4TIhfrvDjS_RM1jhrZIJo';
+    const sheets = google.sheets({ version: 'v4', auth });
+
+    try {
+        const response = await sheets.spreadsheets.values.append({
+            spreadsheetId: spreadsheetId,
+            range: range,
+            valueInputOption: 'USER_ENTERED',
+            insertDataOption: 'INSERT_ROWS',
+            resource: {
+                values: [
+                    [
+                        data.dateTime,
+                        'FALSE',
+                        data.contactNumber,
+                        data.contactPlatform,
+                        data.contactPublishedName,
+                        data.contactSavedName,
+                        data.message,
+                    ],
+                ],
+            },
+        });
+        console.log(response.data);
+    } catch (err) {
+        console.error('The API returned an error: ' + err);
+    }
+}
+
+
 function convertTo24Hour(time) {
     const [hours, minutes] = time.split(':');
     const hoursIn24 = hours % 12 + (time.includes('pm') ? 12 : 0);
@@ -125,6 +164,12 @@ client.on('message', async (msg) => {
     \`.info\`
     Menampilkan informasi ini.
 
+    \`.kegiatan\`
+    Menampilkan informasi kegiatan terkini di YAMR.
+
+    \`.layanan\`
+    Menampilkan informasi layanan di YAMR.
+
     \`.nasehat\`
     Menampilkan inspirasi nasehat dari ayat Al Qur'an.
 
@@ -146,8 +191,8 @@ client.on('message', async (msg) => {
     \`.ai (pertanyaan bebas)\`
     Mengajukan pertanyaan bebas pada Artificial Intelligence. Contoh: \`.ai apa syarat sah wudhu?\`
 
-    \`.saran (saran dan masukan)\`
-    Mengirimkan saran atau pertanyaan kepada admin. Harap dimaklumi bila tanggapan tidak segera diberikan.
+    \`.inputan (informasi atau saran/masukan)\`
+    Sampaikan informasi (mis: kerusakan AC) atau berikan saran untuk seluruh program/unit di YAMR.
     
     \`.status\`
     Cek apakah server online
@@ -198,20 +243,25 @@ client.on('message', async (msg) => {
 
     else if (msg.body === '.sholat') {
         fetch('https://muslimsalat.com/sidoarjo.json')
-            .then(response => response.json())
-            .then(data => {
+            .then((response) => response.json())
+            .then(async (data) => {
                 const prayerTimes = data.items[0];
                 const date = data.items[0].date_for;
                 const city = data.city;
 
                 // Convert prayer times to 24 hour format and adjust the time
                 const fajr = adjustTime(convertTo24Hour(prayerTimes.fajr), 3);
-                const shurooq = adjustTime(convertTo24Hour(prayerTimes.shurooq), 3);
+                const shurooq = adjustTime(
+                    convertTo24Hour(prayerTimes.shurooq),
+                    3
+                );
                 const dhuhr = adjustTime(convertTo24Hour(prayerTimes.dhuhr), 4);
                 const asr = adjustTime(convertTo24Hour(prayerTimes.asr), 2);
-                const maghrib = adjustTime(convertTo24Hour(prayerTimes.maghrib), 1);
+                const maghrib = adjustTime(
+                    convertTo24Hour(prayerTimes.maghrib),
+                    1
+                );
                 const isha = adjustTime(convertTo24Hour(prayerTimes.isha), 3);
-
 
                 const currentDate = new Date();
                 const hijriDate = currentDate.toLocaleString('en-US', {
@@ -219,13 +269,67 @@ client.on('message', async (msg) => {
                     calendar: 'islamic-umalqura',
                 });
 
-                const message = `*⏰ Waktu Sholat ${city}, ${date}*\n*Hijri: ${hijriDate}*\n\n- Shubuh: ${fajr}\n- Shuruq: ${shurooq}\n- Dhuhur: ${dhuhr}\n- Ashar: ${asr}\n- Maghrib: ${maghrib}\n- Isya': ${isha}\n\n~ Al Muhajirin WA Center`;
+                const replyMessage = `*⏰ Waktu Sholat ${city}, ${date}*\n*Hijri: ${hijriDate}*\n\n- Shubuh: ${fajr}\n- Shuruq: ${shurooq}\n- Dhuhur: ${dhuhr}\n- Ashar: ${asr}\n- Maghrib: ${maghrib}\n- Isya': ${isha}\n\n~ Al Muhajirin WA Center`;
 
-                msg.reply(message);
+                await replyWithDelay(chat, msg, replyMessage);
             })
-            .catch(error => console.error('Error:', error));
+            .catch((error) => console.error('Error:', error));
+
+    } 
+    else if (msg.body.startsWith('.kegiatan')) {
+        // get value from the message
+        const spreadsheetId = '1cyJRLS-Op7chCV1sY-jZuu4TIhfrvDjS_RM1jhrZIJo';
+        const range = 'infoLayanan!B2';
+        const sheets = google.sheets({ version: 'v4', auth });
+
+        try {
+            const response = await sheets.spreadsheets.values.get({
+                spreadsheetId: spreadsheetId,
+                range: range,
+            });
+            const value = response.data.values[0][0];
+            // console.log(value);
+            await replyWithDelay(chat, msg, value);
+        } catch (err) {
+            console.error('The API returned an error: ' + err);
+        }
     }
-    
+
+    else if (msg.body.startsWith('.layanan')) {
+        // get value from the message
+        const spreadsheetId = '1cyJRLS-Op7chCV1sY-jZuu4TIhfrvDjS_RM1jhrZIJo';
+        const range = 'infoLayanan!B4';
+        const sheets = google.sheets({ version: 'v4', auth });
+
+        try {
+            const response = await sheets.spreadsheets.values.get({
+                spreadsheetId: spreadsheetId,
+                range: range,
+            });
+            const value = response.data.values[0][0];
+            // console.log(value);
+            await replyWithDelay(chat, msg, value);
+        } catch (err) {
+            console.error('The API returned an error: ' + err);
+        }
+    }
+
+    else if (msg.body.startsWith('.inputan')) {
+        let info = client.info;
+        const now = new Date();
+        const formattedDateTime = `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}-${now.getDate().toString().padStart(2, '0')} ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+        const sender = await msg.getContact();
+        const data = {
+            dateTime: formattedDateTime,
+            contactPlatform: info.platform,
+            contactPublishedName: sender.pushname,
+            contactSavedName: sender.name,
+            contactNumber: sender.number,
+            message: msg.body.replace('.inputan ', ''),
+        };
+
+        await appendToSheet(auth, 'receivedMessages', data);
+    } 
     
     else if (msg.body.startsWith('!askpdf')) {
         console.log('Received a question to ask the PDF.');
@@ -252,9 +356,7 @@ client.on('message', async (msg) => {
             .catch((error) => {
                 console.error('Error:', error);
             });
-    } 
-    
-    else if (msg.body.startsWith('.ayat ')) {
+    } else if (msg.body.startsWith('.ayat ')) {
         let inputanAsli = msg.body.slice(6); // Get the ayah number or surah:ayah from the message
         let surahNumber = inputanAsli.split(':')[0]; // Get the surah number
         surahNumber = parseInt(surahNumber, 10); // Convert the surah number to an integer
@@ -269,7 +371,7 @@ client.on('message', async (msg) => {
         let inputanAPI = `${surahNumber}:${ayahNumber}`;
 
         // eslint-disable-next-line quotes
-        const surahNames = ['Al-Fatihah', 'Al-Baqarah', 'Ali \'Imran', 'An-Nisa\'', 'Al-Ma\'idah', 'Al-An\'am', 'Al-A\'raf', 'Al-Anfal', 'At-Taubah', 'Yunus', 'Hud', 'Yusuf', 'Ar-Ra\'d', 'Ibrahim', 'Al-Hijr', 'An-Nahl', 'Al-Isra\'', 'Al-Kahf', 'Maryam', 'Ta-Ha', 'Al-Anbiya\'', 'Al-Hajj', 'Al-Mu\'minun', 'An-Nur', 'Al-Furqan', 'Ash-Shu\'ara', 'An-Naml', 'Al-Qasas', 'Al-Ankabut', 'Ar-Rum', 'Luqman', 'As-Sajdah', 'Al-Ahzab', 'Saba\'', 'Fatir', 'Ya-Sin', 'As-Saffat', 'Sad', 'Az-Zumar', 'Ghafir', 'Fussilat', 'Ash-Shura', 'Az-Zukhruf', 'Ad-Dukhan', 'Al-Jathiyah', 'Al-Ahqaf', 'Muhammad', 'Al-Fath', 'Al-Hujurat', 'Qaf', 'Adh-Dhariyat', 'At-Tur', 'An-Najm', 'Al-Qamar', 'Ar-Rahman', 'Al-Waqi\'ah', 'Al-Hadid', 'Al-Mujadilah', 'Al-Hashr', 'Al-Mumtahanah', 'As-Saff', 'Al-Jumu\'ah', 'Al-Munafiqun', 'At-Taghabun', 'At-Talaq', 'At-Tahrim', 'Al-Mulk', 'Al-Qalam', 'Al-Haqqah', 'Al-Ma\'arij', 'Nuh', 'Al-Jinn', 'Al-Muzzammil', 'Al-Muddathir', 'Al-Qiyamah', 'Al-Insan', 'Al-Mursalat', 'An-Naba\'', 'An-Nazi\'at', '\'Abasa', 'At-Takwir', 'Al-Infitar', 'Al-Mutaffifin', 'Al-Inshiqaq', 'Al-Buruj', 'At-Tariq', 'Al-A\'la', 'Al-Ghashiyah', 'Al-Fajr', 'Al-Balad', 'Ash-Shams', 'Al-Lail', 'Ad-Duha', 'Ash-Sharh', 'At-Tin', 'Al-\'Alaq', 'Al-Qadr', 'Al-Bayyinah', 'Az-Zalzalah', 'Al-\'Adiyat', 'Al-Qari\'ah', 'At-Takathur', 'Al-\'Asr', 'Al-Humazah', 'Al-Fil', 'Quraysh', 'Al-Ma\'un', 'Al-Kawthar', 'Al-Kafirun', 'An-Nasr', 'Al-Masad', 'Al-Ikhlas', 'Al-Falaq', 'An-Nas' ];
+        const surahNames = ['Al-Fatihah', 'Al-Baqarah', "Ali 'Imran", "An-Nisa'", "Al-Ma'idah", "Al-An'am", "Al-A'raf", 'Al-Anfal', 'At-Taubah', 'Yunus', 'Hud', 'Yusuf', "Ar-Ra'd", 'Ibrahim', 'Al-Hijr', 'An-Nahl', "Al-Isra'", 'Al-Kahf', 'Maryam', 'Ta-Ha', "Al-Anbiya'", 'Al-Hajj', "Al-Mu'minun", 'An-Nur', 'Al-Furqan', "Ash-Shu'ara", 'An-Naml', 'Al-Qasas', 'Al-Ankabut', 'Ar-Rum', 'Luqman', 'As-Sajdah', 'Al-Ahzab', "Saba'", 'Fatir', 'Ya-Sin', 'As-Saffat', 'Sad', 'Az-Zumar', 'Ghafir', 'Fussilat', 'Ash-Shura', 'Az-Zukhruf', 'Ad-Dukhan', 'Al-Jathiyah', 'Al-Ahqaf', 'Muhammad', 'Al-Fath', 'Al-Hujurat', 'Qaf', 'Adh-Dhariyat', 'At-Tur', 'An-Najm', 'Al-Qamar', 'Ar-Rahman', "Al-Waqi'ah", 'Al-Hadid', 'Al-Mujadilah', 'Al-Hashr', 'Al-Mumtahanah', 'As-Saff', "Al-Jumu'ah", 'Al-Munafiqun', 'At-Taghabun', 'At-Talaq', 'At-Tahrim', 'Al-Mulk', 'Al-Qalam', 'Al-Haqqah', "Al-Ma'arij", 'Nuh', 'Al-Jinn', 'Al-Muzzammil', 'Al-Muddathir', 'Al-Qiyamah', 'Al-Insan', 'Al-Mursalat', "An-Naba'", "An-Nazi'at", "'Abasa", 'At-Takwir', 'Al-Infitar', 'Al-Mutaffifin', 'Al-Inshiqaq', 'Al-Buruj', 'At-Tariq', "Al-A'la", 'Al-Ghashiyah', 'Al-Fajr', 'Al-Balad', 'Ash-Shams', 'Al-Lail', 'Ad-Duha', 'Ash-Sharh', 'At-Tin', "Al-'Alaq", 'Al-Qadr', 'Al-Bayyinah', 'Az-Zalzalah', "Al-'Adiyat", "Al-Qari'ah", 'At-Takathur', "Al-'Asr", 'Al-Humazah', 'Al-Fil', 'Quraysh', "Al-Ma'un", 'Al-Kawthar', 'Al-Kafirun', 'An-Nasr', 'Al-Masad', 'Al-Ikhlas', 'Al-Falaq', 'An-Nas', ];
 
         const surahName = surahNames[surahNumber - 1]; // Get the surah name using the surah number as an index
 
@@ -285,7 +387,6 @@ client.on('message', async (msg) => {
                 );
             })
             .catch((error) => console.error('Error:', error));
-
     } else if (msg.body.startsWith('.cari ')) {
         const input = msg.body.slice(6); // Get the user's input, removing "!qcari " from the start
         let keyword, surah;
@@ -346,7 +447,8 @@ client.on('message', async (msg) => {
                     messages: [
                         {
                             role: 'system',
-                            content: 'You are a helpful assistant.',
+                            content:
+                                'Anda memberi edukasi dan menerima pertanyaan yang terkait dengan agama, pendidikan, sosial, dan kesehatan.',
                         },
                         { role: 'user', content: prompt },
                     ],
@@ -364,6 +466,8 @@ client.on('message', async (msg) => {
 
         // Call the OpenAI function
         callOpenAI();
+    } else if (msg.body === '!reaction') {
+        msg.react('👍');
     } else if (msg.body === '!chats') {
         const chats = await client.getChats();
         client.sendMessage(msg.from, `The bot has ${chats.length} chats open.`);
@@ -390,6 +494,25 @@ client.on('message', async (msg) => {
             
         `
         );
+    }
+
+    const prefixes = ['.info', '.nasehat', '.sehat', '.sholat', '.hadits', '.ayat', '.cari', '.ai', '.inputan', '.status'];
+
+    if (prefixes.some(prefix => msg.body.startsWith(prefix))) {
+        let info = client.info;
+        const now = new Date();
+        const formattedDateTime = `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}-${now.getDate().toString().padStart(2, '0')} ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+        const sender = await msg.getContact();
+        const data = {
+            dateTime: formattedDateTime,
+            contactPlatform: info.platform,
+            contactPublishedName: sender.pushname,
+            contactSavedName: sender.name,
+            contactNumber: sender.number,
+            message: msg.body,
+        };
+
+        await appendToSheet(auth, 'aktivitas', data);
     }
 });
 
