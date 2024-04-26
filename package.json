@@ -35,7 +35,7 @@
     "express": "^4.19.2",
     "fluent-ffmpeg": "2.1.2",
     "googleapis": "^135.0.0",
-    "mime": "^3.0.0",
+    "mime": "^4.0.3",
     "node-fetch": "^2.7.0",
     "node-webpmux": "3.1.7",
     "openai": "^4.35.0",
